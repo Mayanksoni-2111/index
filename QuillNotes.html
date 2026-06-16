@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Quill Notes</title>
+<style>
+  :root{
+    --app-bg:#F3F1EC;
+    --surface:#FFFFFF;
+    --surface-alt:#EAE7E0;
+    --text:#2B2B2E;
+    --text-muted:#9A968D;
+    --accent:#2F7E76;
+    --accent-soft:#DCEEEA;
+    --border:#DEDAD0;
+    --danger:#C75C4A;
+    --shadow: 0 4px 16px rgba(40,35,25,0.10);
+  }
+  [data-theme="dark"]{
+    --app-bg:#17181A;
+    --surface:#232427;
+    --surface-alt:#2D2E31;
+    --text:#ECEAE6;
+    --text-muted:#8B8C90;
+    --accent:#5FBFB5;
+    --accent-soft:#243634;
+    --border:#3A3B3E;
+    --danger:#E0816F;
+    --shadow: 0 4px 18px rgba(0,0,0,0.45);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background:var(--app-bg); color:var(--text);
+    -webkit-user-select:none; user-select:none;
+  }
+  button{ font-family:inherit; }
+  #app{ height:100%; width:100%; position:relative; }
+
+  /* ---------- Screens ---------- */
+  .screen{ position:absolute; inset:0; display:flex; flex-direction:column; }
+  .screen.hidden{ display:none; }
+
+  /* ---------- Home screen ---------- */
+  #homeHeader{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:22px 28px 12px 28px;
+  }
+  #homeHeader h1{ margin:0; font-size:26px; font-weight:700; letter-spacing:.2px; }
+  .header-actions{ display:flex; gap:10px; align-items:center; }
+
+  #notebookGrid{
+    flex:1; overflow-y:auto; padding:10px 28px 40px 28px;
+    display:grid; gap:22px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 180px));
+    align-content:flex-start;
+  }
+  .notebook-card{ display:flex; flex-direction:column; gap:8px; cursor:pointer; position:relative; }
+  .notebook-cover{
+    width:100%; aspect-ratio: 3/4; border-radius:10px; position:relative;
+    box-shadow: var(--shadow);
+    background-size:cover; background-position:center;
+    display:flex; align-items:flex-end; padding:12px;
+    border:1px solid rgba(0,0,0,0.06);
+    transition: transform .12s ease;
+  }
+  .notebook-card:active .notebook-cover{ transform: scale(.97); }
+  .notebook-cover::before{
+    content:""; position:absolute; left:0; top:8%; bottom:8%; width:6px;
+    background:rgba(0,0,0,0.18); border-radius:2px 0 0 2px;
+  }
+  .notebook-cover-title{
+    color:rgba(255,255,255,0.95); font-weight:600; font-size:14px;
+    text-shadow:0 1px 3px rgba(0,0,0,0.25);
+  }
+  .notebook-meta{ font-size:12px; color:var(--text-muted); display:flex; justify-content:space-between; padding:0 2px; }
+  .notebook-name{ font-size:13px; font-weight:600; }
+  .notebook-delete{
+    position:absolute; top:8px; right:8px; width:26px; height:26px; border-radius:50%;
+    background:rgba(0,0,0,0.35); border:none; color:#fff; display:flex; align-items:center;
+    justify-content:center; cursor:pointer; opacity:0; transition:opacity .12s;
+  }
+  .notebook-card:hover .notebook-delete, .notebook-card.show-delete .notebook-delete{ opacity:1; }
+
+  .new-notebook-card{
+    aspect-ratio:3/4; border-radius:10px; border:2px dashed var(--border);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    color:var(--text-muted); flex-direction:column; gap:6px; font-size:12px; font-weight:600;
+  }
+  .new-notebook-card:active{ background:var(--surface-alt); }
+
+  /* ---------- Icon buttons ---------- */
+  .icon-btn{
+    width:38px; height:38px; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex-shrink:0;
+  }
+  .icon-btn:active{ background:var(--surface-alt); }
+  .icon-btn.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .icon-btn:disabled{ opacity:.35; }
+  .icon-btn svg{ width:18px; height:18px; }
+  .text-btn{
+    height:38px; padding:0 14px; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-size:14px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; gap:6px;
+  }
+  .text-btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .text-btn:active{ opacity:.8; }
+
+  /* ---------- Notebook (editor) screen ---------- */
+  #notebookScreen{ flex-direction:column; }
+  #topBar{
+    display:flex; align-items:center; gap:8px; padding:10px 14px;
+    background:var(--surface); border-bottom:1px solid var(--border); flex-wrap:nowrap;
+  }
+  #notebookTitle{
+    border:none; background:transparent; font-size:16px; font-weight:700; color:var(--text);
+    flex:1; min-width:60px; padding:6px 8px; border-radius:8px;
+  }
+  #notebookTitle:focus{ background:var(--surface-alt); }
+  .topbar-spacer{ flex:1; }
+  .topbar-group{ display:flex; gap:6px; align-items:center; }
+  .v-divider{ width:1px; height:24px; background:var(--border); margin:0 4px; }
+
+  /* ---------- Toolbar ---------- */
+  #toolbar{
+    display:flex; align-items:center; gap:6px; padding:8px 14px;
+    background:var(--surface); border-bottom:1px solid var(--border);
+    overflow-x:auto; white-space:nowrap;
+  }
+  #toolbar::-webkit-scrollbar{ display:none; }
+  .swatch{
+    width:26px; height:26px; border-radius:50%; border:2px solid var(--border);
+    cursor:pointer; flex-shrink:0; position:relative;
+  }
+  .swatch.active{ border-color:var(--text); box-shadow:0 0 0 2px var(--accent-soft); }
+  .swatch-custom{
+    width:26px; height:26px; border-radius:50%; flex-shrink:0; border:2px solid var(--border);
+    overflow:hidden; position:relative; background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);
+  }
+  .swatch-custom input{
+    position:absolute; inset:-4px; width:calc(100% + 8px); height:calc(100% + 8px);
+    opacity:0; cursor:pointer; border:none; padding:0;
+  }
+  #sizeSlider{ width:90px; accent-color:var(--accent); }
+  .size-preview{
+    width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .size-preview-dot{ background:var(--text); border-radius:50%; }
+  .toolbar-label{ font-size:11px; color:var(--text-muted); font-weight:600; padding:0 2px; flex-shrink:0; }
+
+  /* ---------- Canvas area ---------- */
+  #canvasArea{
+    flex:1; overflow:auto; display:flex; justify-content:center;
+    background:var(--app-bg); padding:24px;
+    -webkit-overflow-scrolling: touch;
+  }
+  #pageStage{
+    position:relative; flex-shrink:0; transform-origin: top left;
+    box-shadow: var(--shadow); border-radius:4px;
+  }
+  #drawCanvas{ position:absolute; top:0; left:0; display:block; touch-action:none; border-radius:4px; }
+  #overlayLayer{ position:absolute; top:0; left:0; width:100%; height:100%; }
+  #lassoCanvas{ position:absolute; top:0; left:0; pointer-events:none; }
+
+  .text-object{
+    position:absolute; min-width:24px; min-height:24px; padding:2px 4px;
+    cursor:move; outline:none; line-height:1.25; word-break:break-word;
+    border:1px dashed transparent;
+  }
+  .text-object.editing, .text-object.selected{ border-color: var(--accent); }
+  .image-object{ position:absolute; cursor:move; }
+  .image-object img{ width:100%; height:100%; display:block; pointer-events:none; border-radius:2px; }
+  .obj-handle{
+    position:absolute; width:18px; height:18px; background:var(--accent); border:2px solid #fff;
+    border-radius:50%; right:-9px; bottom:-9px; cursor:nwse-resize; display:none;
+  }
+  .image-object.selected .obj-handle, .text-object.selected .obj-handle{ display:block; }
+  .obj-delete{
+    position:absolute; width:22px; height:22px; background:var(--danger); border:2px solid #fff;
+    border-radius:50%; left:-11px; top:-11px; display:none; cursor:pointer; color:#fff;
+    align-items:center; justify-content:center; font-size:12px; font-weight:700;
+  }
+  .image-object.selected .obj-delete, .text-object.selected .obj-delete{ display:flex; }
+
+  #selectionBox{
+    position:absolute; border:1.5px dashed var(--accent); background:rgba(95,191,181,0.12);
+    display:none; pointer-events:none;
+  }
+
+  /* ---------- Page strip ---------- */
+  #pageStrip{
+    display:flex; gap:10px; padding:10px 14px; background:var(--surface);
+    border-top:1px solid var(--border); overflow-x:auto; align-items:center;
+    -webkit-overflow-scrolling: touch;
+  }
+  #pageStrip::-webkit-scrollbar{ display:none; }
+  .page-thumb{
+    flex-shrink:0; width:64px; height:84px; border-radius:6px; border:2px solid var(--border);
+    cursor:pointer; position:relative; overflow:hidden; background:#fff;
+  }
+  .page-thumb.active{ border-color:var(--accent); }
+  .page-thumb canvas{ width:100%; height:100%; }
+  .page-thumb .page-num{
+    position:absolute; bottom:2px; right:4px; font-size:10px; color:var(--text-muted);
+    background:rgba(255,255,255,0.7); border-radius:4px; padding:0 3px;
+  }
+  .page-add-btn{
+    flex-shrink:0; width:64px; height:84px; border-radius:6px; border:2px dashed var(--border);
+    display:flex; align-items:center; justify-content:center; color:var(--text-muted); cursor:pointer;
+  }
+
+  /* ---------- Modal ---------- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,0.35); display:flex; align-items:center;
+    justify-content:center; z-index:100;
+  }
+  .modal-backdrop.hidden{ display:none; }
+  .modal{
+    background:var(--surface); border-radius:16px; padding:22px; width:340px; max-width:90vw;
+    box-shadow:var(--shadow); max-height:85vh; overflow-y:auto;
+  }
+  .modal h2{ margin:0 0 14px 0; font-size:18px; }
+  .modal label{ display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin:14px 0 6px; }
+  .modal input[type="text"]{
+    width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
+    background:var(--app-bg); color:var(--text); font-size:15px;
+  }
+  .option-row{ display:flex; gap:10px; flex-wrap:wrap; }
+  .option-chip{
+    padding:8px 14px; border-radius:10px; border:1px solid var(--border); background:var(--app-bg);
+    cursor:pointer; font-size:13px; font-weight:600; color:var(--text);
+  }
+  .option-chip.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .color-grid{ display:flex; gap:10px; flex-wrap:wrap; }
+  .color-dot{
+    width:32px; height:32px; border-radius:50%; cursor:pointer; border:2px solid transparent;
+  }
+  .color-dot.active{ border-color:var(--text); box-shadow:0 0 0 2px var(--accent-soft); }
+  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+  .modal-actions .text-btn.danger{ background:var(--danger); border-color:var(--danger); color:#fff; margin-right:auto; }
+
+  /* ---------- Toast ---------- */
+  #toast{
+    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--text); color:var(--app-bg); padding:10px 18px; border-radius:10px;
+    font-size:13px; font-weight:600; opacity:0; transition:all .25s ease; z-index:200; pointer-events:none;
+  }
+  [data-theme="dark"] #toast{ background:var(--accent); color:#0c1a18; }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  input[type=file]{ display:none; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== HOME SCREEN ===================== -->
+  <div class="screen" id="homeScreen">
+    <div id="homeHeader">
+      <h1>Quill Notes</h1>
+      <div class="header-actions">
+        <button class="icon-btn" id="homeDarkToggle" title="Dark mode"></button>
+        <button class="icon-btn" id="homeImportBtn" title="Import backup"></button>
+        <button class="text-btn primary" id="newNotebookBtn">New Notebook</button>
+      </div>
+    </div>
+    <div id="notebookGrid"></div>
+  </div>
+
+  <!-- ===================== NOTEBOOK SCREEN ===================== -->
+  <div class="screen hidden" id="notebookScreen">
+    <div id="topBar">
+      <button class="icon-btn" id="backBtn" title="All notebooks"></button>
+      <input type="text" id="notebookTitle" />
+      <div class="topbar-group">
+        <button class="icon-btn" id="undoBtn" title="Undo"></button>
+        <button class="icon-btn" id="redoBtn" title="Redo"></button>
+        <div class="v-divider"></div>
+        <button class="icon-btn" id="zoomOutBtn" title="Zoom out"></button>
+        <button class="icon-btn" id="zoomResetBtn" title="Reset zoom"></button>
+        <button class="icon-btn" id="zoomInBtn" title="Zoom in"></button>
+        <div class="v-divider"></div>
+        <button class="icon-btn" id="pageSettingsBtn" title="Page settings"></button>
+        <button class="icon-btn" id="exportBtn" title="Export"></button>
+        <button class="icon-btn" id="darkToggleBtn" title="Dark mode"></button>
+      </div>
+    </div>
+
+    <div id="toolbar"></div>
+
+    <div id="canvasArea">
+      <div id="pageStage">
+        <canvas id="drawCanvas"></canvas>
+        <div id="overlayLayer"></div>
+        <canvas id="lassoCanvas"></canvas>
+        <div id="selectionBox"></div>
+      </div>
+    </div>
+
+    <div id="pageStrip"></div>
+  </div>
+
+  <!-- ===================== MODALS ===================== -->
+  <div class="modal-backdrop hidden" id="newNotebookModal">
+    <div class="modal">
+      <h2>New Notebook</h2>
+      <label>Name</label>
+      <input type="text" id="nbNameInput" placeholder="Untitled Notebook" maxlength="40">
+      <label>Cover color</label>
+      <div class="color-grid" id="nbColorGrid"></div>
+      <div class="modal-actions">
+        <button class="text-btn" id="nbCancelBtn">Cancel</button>
+        <button class="text-btn primary" id="nbCreateBtn">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="pageSettingsModal">
+    <div class="modal">
+      <h2>Page Settings</h2>
+      <label>Template</label>
+      <div class="option-row" id="templateOptions"></div>
+      <label>Paper color</label>
+      <div class="color-grid" id="paperColorOptions"></div>
+      <div class="modal-actions">
+        <button class="text-btn danger" id="deletePageBtn">Delete page</button>
+        <button class="text-btn" id="pageSettingsCloseBtn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="exportModal">
+    <div class="modal">
+      <h2>Export</h2>
+      <label>Page</label>
+      <div class="option-row">
+        <button class="text-btn" id="exportPagePngBtn">Save page as image</button>
+      </div>
+      <label>Notebook</label>
+      <div class="option-row">
+        <button class="text-btn" id="exportNotebookJsonBtn">Export notebook backup (.json)</button>
+      </div>
+      <div class="modal-actions">
+        <button class="text-btn" id="exportCloseBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="imageFileInput" accept="image/*">
+  <input type="file" id="importFileInput" accept="application/json">
+
+  <div id="toast"></div>
+</div>
+<script>
+/* =========================================================
+   Quill Notes — app.js
+   ========================================================= */
+
+// ── SVG icons ──────────────────────────────────────────────
+const ICONS = {
+  back:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`,
+  undo:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>`,
+  redo:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>`,
+  zoomIn:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`,
+  zoomOut:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`,
+  settings:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  export:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+  moon:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`,
+  sun:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
+  plus:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  pen:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>`,
+  pencil:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`,
+  highlighter: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l-6 6v3h9l3-3"/><path d="M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4z"/></svg>`,
+  eraser:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H7L3 16l10-10 7 7-2.5 2.5"/><path d="M6.0 11.0 l7.0 7.0"/></svg>`,
+  lasso:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11c0-2.76 2.24-5 5-5s5 2.24 5 5-2.24 5-5 5"/><path d="M12 16c-1.1 0-2.12-.35-2.94-.94L5 19l2.06 2.06c.82-.59 1.84-.94 2.94-.94 1.1 0 2.12.35 2.94.94L17 17l-2.06-2.06A4.97 4.97 0 0 1 12 16z"/></svg>`,
+  text:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>`,
+  image:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
+  trash:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`,
+  import:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>`,
+};
+
+// ── Constants ───────────────────────────────────────────────
+const PAGE_W = 840, PAGE_H = 1120;
+const NOTEBOOK_COLORS = ['#2F7E76','#6B5EA8','#C75C4A','#3D6B9A','#B07D3E','#5E8E4A','#854A78','#384555'];
+const PAPER_COLORS    = ['#FFFFFF','#FFF9EC','#ECF5FF','#F0FFED','#FFF0F0','#F3F1EC','#1A1C20','#232B26'];
+const PEN_COLORS      = ['#2B2B2E','#FFFFFF','#2F7E76','#C75C4A','#3D6B9A','#B07D3E','#6B5EA8','#5E8E4A','#f7ca45','#F08080'];
+const TEMPLATES       = ['blank','lined','grid','dotted'];
+const ZOOM_STEPS      = [0.5, 0.7, 0.85, 1.0, 1.2, 1.5, 1.75, 2.0];
+
+// ── App State ───────────────────────────────────────────────
+let state = {
+  notebooks: [],          // [{id, name, color, pages:[{id, template, paperColor, strokes:[], objects:[]}]}]
+  openNotebookId: null,
+  openPageIdx: 0,
+  tool: 'pen',            // pen | pencil | highlighter | eraser | lasso | text | image
+  color: '#2B2B2E',
+  size: 3,
+  zoom: 1.0,
+  darkMode: false,
+  history: [],            // undo stack (snapshots of full page strokes+objects)
+  historyFuture: [],
+};
+
+let drawing = false;
+let currentPath = null;    // {color,size,opacity,composite,points}
+let lassoPoints = [];
+let lassoActive = false;
+let activeTextEl = null;
+let activeImgEl = null;
+let dragInfo = null;
+let resizeInfo = null;
+let twoFingerStart = null;
+let initialZoom = 1;
+
+// ── DOM refs ────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+const homeScreen        = $('homeScreen');
+const notebookScreen    = $('notebookScreen');
+const notebookGrid      = $('notebookGrid');
+const notebookTitleInput= $('notebookTitle');
+const topBar            = $('topBar');
+const toolbar           = $('toolbar');
+const canvasArea        = $('canvasArea');
+const pageStage         = $('pageStage');
+const drawCanvas        = $('drawCanvas');
+const lassoCanvas       = $('lassoCanvas');
+const overlayLayer      = $('overlayLayer');
+const selectionBox      = $('selectionBox');
+const pageStrip         = $('pageStrip');
+const toast             = $('toast');
+const imageFileInput    = $('imageFileInput');
+const importFileInput   = $('importFileInput');
+
+const ctx = drawCanvas.getContext('2d');
+const lctx = lassoCanvas.getContext('2d');
+
+// ── Persistence ─────────────────────────────────────────────
+function saveAll() {
+  try { localStorage.setItem('quill_state', JSON.stringify(state.notebooks)); } catch(e){}
+}
+function loadAll() {
+  try {
+    const raw = localStorage.getItem('quill_state');
+    if(raw) state.notebooks = JSON.parse(raw);
+  } catch(e){ state.notebooks = []; }
+}
+
+// ── Toast ───────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+// ── Dark mode ───────────────────────────────────────────────
+function applyDark(on) {
+  state.darkMode = on;
+  document.documentElement.setAttribute('data-theme', on ? 'dark' : '');
+  const icon = on ? ICONS.sun : ICONS.moon;
+  $('darkToggleBtn').innerHTML = icon;
+  $('homeDarkToggle').innerHTML = icon;
+  localStorage.setItem('quill_dark', on ? '1' : '0');
+}
+function toggleDark() { applyDark(!state.darkMode); }
+
+// ── Notebook helpers ─────────────────────────────────────────
+function makeId() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function makePage(template='blank', paperColor='#FFFFFF') {
+  return { id: makeId(), template, paperColor, strokes:[], objects:[] };
+}
+function makeNotebook(name, color) {
+  return { id: makeId(), name, color, pages: [makePage()] };
+}
+function openNotebook() { return state.notebooks.find(n=>n.id===state.openNotebookId); }
+function openPage()     {
+  const nb = openNotebook();
+  return nb ? nb.pages[state.openPageIdx] : null;
+}
+
+// ── Template drawing ─────────────────────────────────────────
+function drawTemplate(c, template, paperColor) {
+  const cx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  cx.clearRect(0,0,W,H);
+  cx.fillStyle = paperColor || '#FFFFFF';
+  cx.fillRect(0,0,W,H);
+  if(template==='blank') return;
+  cx.strokeStyle = 'rgba(100,100,180,0.15)';
+  cx.lineWidth = 1;
+  if(template==='lined') {
+    const gap = 40;
+    for(let y=gap; y<H; y+=gap){ cx.beginPath(); cx.moveTo(60,y); cx.lineTo(W-20,y); cx.stroke(); }
+    cx.strokeStyle = 'rgba(200,80,80,0.2)'; cx.lineWidth = 1.2;
+    cx.beginPath(); cx.moveTo(58,0); cx.lineTo(58,H); cx.stroke();
+  } else if(template==='grid') {
+    const gap = 40;
+    for(let x=gap; x<W; x+=gap){ cx.beginPath(); cx.moveTo(x,0); cx.lineTo(x,H); cx.stroke(); }
+    for(let y=gap; y<H; y+=gap){ cx.beginPath(); cx.moveTo(0,y); cx.lineTo(W,y); cx.stroke(); }
+  } else if(template==='dotted') {
+    const gap = 40;
+    cx.fillStyle = 'rgba(100,100,180,0.25)';
+    for(let x=gap; x<W; x+=gap)
+      for(let y=gap; y<H; y+=gap){
+        cx.beginPath(); cx.arc(x,y,1.5,0,Math.PI*2); cx.fill();
+      }
+  }
+}
+
+// ── Canvas setup ─────────────────────────────────────────────
+function setupCanvas() {
+  const pg = openPage(); if(!pg) return;
+  drawCanvas.width  = PAGE_W;
+  drawCanvas.height = PAGE_H;
+  lassoCanvas.width = PAGE_W;
+  lassoCanvas.height= PAGE_H;
+  pageStage.style.width  = PAGE_W + 'px';
+  pageStage.style.height = PAGE_H + 'px';
+  applyZoom(state.zoom, false);
+  redrawPage();
+}
+
+function redrawPage() {
+  const pg = openPage(); if(!pg) return;
+  // Background + template
+  drawTemplate(drawCanvas, pg.template, pg.paperColor);
+  // Strokes
+  for(const s of pg.strokes) renderStroke(s);
+}
+
+function renderStroke(s) {
+  if(!s || s.points.length < 2) return;
+  ctx.save();
+  ctx.globalCompositeOperation = s.composite || 'source-over';
+  ctx.globalAlpha   = s.opacity || 1;
+  ctx.strokeStyle   = s.color;
+  ctx.lineCap       = 'round';
+  ctx.lineJoin      = 'round';
+  ctx.lineWidth     = s.size;
+  ctx.beginPath();
+  ctx.moveTo(s.points[0].x, s.points[0].y);
+  for(let i=1;i<s.points.length;i++){
+    const p0=s.points[i-1], p1=s.points[i];
+    const mx=(p0.x+p1.x)/2, my=(p0.y+p1.y)/2;
+    ctx.quadraticCurveTo(p0.x, p0.y, mx, my);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── Zoom ────────────────────────────────────────────────────
+function applyZoom(z, save=true) {
+  state.zoom = Math.max(0.5, Math.min(2.5, z));
+  pageStage.style.transform = `scale(${state.zoom})`;
+  pageStage.style.marginBottom = ((PAGE_H * state.zoom) - PAGE_H + 48) + 'px';
+  if(save) localStorage.setItem('quill_zoom', state.zoom);
+}
+function stepZoom(dir) {
+  const cur = state.zoom;
+  if(dir>0) {
+    const next = ZOOM_STEPS.find(z=>z>cur+0.01);
+    applyZoom(next || 2.5);
+  } else {
+    const arr = [...ZOOM_STEPS].reverse();
+    const next = arr.find(z=>z<cur-0.01);
+    applyZoom(next || 0.5);
+  }
+}
+
+// ── History ─────────────────────────────────────────────────
+function snapHistory() {
+  const pg = openPage(); if(!pg) return;
+  const snap = JSON.parse(JSON.stringify({ strokes: pg.strokes, objects: pg.objects }));
+  state.history.push(snap);
+  if(state.history.length > 60) state.history.shift();
+  state.historyFuture = [];
+  updateUndoRedo();
+}
+function undo() {
+  const pg = openPage(); if(!pg || !state.history.length) return;
+  state.historyFuture.push(JSON.parse(JSON.stringify({ strokes: pg.strokes, objects: pg.objects })));
+  const snap = state.history.pop();
+  pg.strokes = snap.strokes; pg.objects = snap.objects;
+  rebuildObjects(); redrawPage(); saveAll(); updateUndoRedo();
+}
+function redo() {
+  const pg = openPage(); if(!pg || !state.historyFuture.length) return;
+  state.history.push(JSON.parse(JSON.stringify({ strokes: pg.strokes, objects: pg.objects })));
+  const snap = state.historyFuture.pop();
+  pg.strokes = snap.strokes; pg.objects = snap.objects;
+  rebuildObjects(); redrawPage(); saveAll(); updateUndoRedo();
+}
+function updateUndoRedo() {
+  $('undoBtn').disabled = state.history.length === 0;
+  $('redoBtn').disabled = state.historyFuture.length === 0;
+}
+
+// ── Object layer (text/images) ───────────────────────────────
+function rebuildObjects() {
+  overlayLayer.innerHTML = '';
+  const pg = openPage(); if(!pg) return;
+  for(const o of pg.objects) {
+    if(o.type==='text')  createTextEl(o, false);
+    if(o.type==='image') createImageEl(o, false);
+  }
+}
+
+function createTextEl(o, isNew) {
+  const el = document.createElement('div');
+  el.className = 'text-object';
+  el.contentEditable = 'true';
+  el.style.left    = o.x + 'px';
+  el.style.top     = o.y + 'px';
+  el.style.width   = (o.w || 180) + 'px';
+  el.style.fontSize= (o.fontSize || 18) + 'px';
+  el.style.color   = o.color || '#2B2B2E';
+  el.style.fontFamily = o.font || '-apple-system, sans-serif';
+  el.innerHTML = o.html || '';
+  el.dataset.oid = o.id;
+
+  const handle = document.createElement('div'); handle.className='obj-handle';
+  const del    = document.createElement('div'); del.className='obj-delete'; del.innerHTML='×';
+  el.appendChild(handle); el.appendChild(del);
+
+  overlayLayer.appendChild(el);
+  bindObjectEvents(el, o, handle, del);
+
+  if(isNew) {
+    el.classList.add('editing','selected');
+    activeTextEl = el;
+    setTimeout(()=>el.focus(),30);
+  }
+  return el;
+}
+
+function createImageEl(o, isNew) {
+  const el = document.createElement('div');
+  el.className = 'image-object';
+  el.style.left   = o.x + 'px';
+  el.style.top    = o.y + 'px';
+  el.style.width  = (o.w || 200) + 'px';
+  el.style.height = (o.h || 200) + 'px';
+  el.dataset.oid  = o.id;
+  const img = document.createElement('img');
+  img.src = o.src;
+  const handle = document.createElement('div'); handle.className='obj-handle';
+  const del    = document.createElement('div'); del.className='obj-delete'; del.innerHTML='×';
+  el.appendChild(img); el.appendChild(handle); el.appendChild(del);
+  overlayLayer.appendChild(el);
+  bindObjectEvents(el, o, handle, del);
+  return el;
+}
+
+function bindObjectEvents(el, o, handle, del) {
+  // Select on tap
+  el.addEventListener('pointerdown', e => {
+    if(state.tool !== 'lasso' && state.tool !== 'eraser' && !el.classList.contains('editing')) {
+      e.stopPropagation();
+      selectObject(el);
+    }
+  });
+
+  // Drag
+  el.addEventListener('pointerdown', e => {
+    if(e.target === handle || e.target === del) return;
+    if(el.classList.contains('editing')) return;
+    e.preventDefault();
+    dragInfo = { el, o, startX: e.clientX, startY: e.clientY, ox: o.x, oy: o.y };
+    el.setPointerCapture(e.pointerId);
+  });
+  el.addEventListener('pointermove', e => {
+    if(!dragInfo || dragInfo.el !== el) return;
+    const dx = (e.clientX - dragInfo.startX) / state.zoom;
+    const dy = (e.clientY - dragInfo.startY) / state.zoom;
+    o.x = Math.max(0, dragInfo.ox + dx);
+    o.y = Math.max(0, dragInfo.oy + dy);
+    el.style.left = o.x + 'px';
+    el.style.top  = o.y + 'px';
+  });
+  el.addEventListener('pointerup', e => {
+    if(dragInfo && dragInfo.el === el) { dragInfo = null; saveAll(); }
+  });
+
+  // Resize handle
+  handle.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    resizeInfo = { el, o, startX: e.clientX, startY: e.clientY, ow: parseInt(el.style.width), oh: parseInt(el.style.height||el.offsetHeight) };
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', e => {
+    if(!resizeInfo || resizeInfo.el !== el) return;
+    const dw = (e.clientX - resizeInfo.startX) / state.zoom;
+    const dh = (e.clientY - resizeInfo.startY) / state.zoom;
+    const nw = Math.max(60, resizeInfo.ow + dw);
+    const nh = Math.max(30, resizeInfo.oh + dh);
+    o.w = nw; o.h = nh;
+    el.style.width  = nw + 'px';
+    if(o.type==='image') el.style.height = nh + 'px';
+  });
+  handle.addEventListener('pointerup', () => { resizeInfo = null; saveAll(); });
+
+  // Double-tap text to edit
+  if(o.type==='text') {
+    el.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      el.classList.add('editing','selected');
+      activeTextEl = el;
+    });
+    el.addEventListener('blur', () => {
+      el.classList.remove('editing');
+      o.html = el.innerHTML;
+      syncObj(o, el);
+      saveAll();
+    });
+  }
+
+  // Delete
+  del.addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    snapHistory();
+    const pg = openPage();
+    const idx = pg.objects.findIndex(x=>x.id===o.id);
+    if(idx>-1) pg.objects.splice(idx,1);
+    el.remove(); saveAll();
+  });
+}
+
+function selectObject(el) {
+  document.querySelectorAll('.text-object.selected,.image-object.selected').forEach(x=>x.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function syncObj(o, el) {
+  o.x = parseFloat(el.style.left);
+  o.y = parseFloat(el.style.top);
+  o.w = parseFloat(el.style.width);
+}
+
+function deselectAll() {
+  if(activeTextEl) { activeTextEl.blur(); activeTextEl=null; }
+  document.querySelectorAll('.text-object.selected,.image-object.selected').forEach(x=>x.classList.remove('selected','editing'));
+}
+
+// ── Pointer → canvas coords ─────────────────────────────────
+function ptOnCanvas(e) {
+  const rect = drawCanvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) / state.zoom,
+    y: (e.clientY - rect.top)  / state.zoom,
+  };
+}
+
+// ── Drawing events ───────────────────────────────────────────
+drawCanvas.addEventListener('pointerdown', onDown, {passive:false});
+drawCanvas.addEventListener('pointermove', onMove, {passive:false});
+drawCanvas.addEventListener('pointerup',   onUp,   {passive:false});
+drawCanvas.addEventListener('pointercancel', onUp, {passive:false});
+
+// Two-finger pinch zoom on canvas area
+canvasArea.addEventListener('touchstart', e => {
+  if(e.touches.length===2){
+    twoFingerStart = {
+      d: Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY),
+      z: state.zoom,
+    };
+  }
+},{passive:true});
+canvasArea.addEventListener('touchmove', e => {
+  if(e.touches.length===2 && twoFingerStart){
+    const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    applyZoom(twoFingerStart.z * (d / twoFingerStart.d));
+  }
+},{passive:true});
+canvasArea.addEventListener('touchend', () => { twoFingerStart=null; },{passive:true});
+
+// Double-two-finger undo
+let lastTwoTap = 0;
+canvasArea.addEventListener('touchend', e => {
+  if(e.changedTouches.length===2) {
+    const now = Date.now();
+    if(now - lastTwoTap < 350) undo();
+    lastTwoTap = now;
+  }
+},{passive:true});
+
+function onDown(e) {
+  if(e.pointerType==='touch' && e.touches && e.touches.length>1) return;
+  if(state.tool==='text' || state.tool==='image') return;
+  e.preventDefault();
+  deselectAll();
+  drawCanvas.setPointerCapture(e.pointerId);
+
+  const pt = ptOnCanvas(e);
+  const pressure = e.pressure || 0.5;
+
+  if(state.tool==='lasso') {
+    lassoPoints = [pt];
+    lassoActive = true;
+    lctx.clearRect(0,0,PAGE_W,PAGE_H);
+    return;
+  }
+
+  drawing = true;
+  snapHistory();
+
+  let composite = 'source-over', opacity = 1, color = state.color, size = state.size;
+  if(state.tool==='eraser')     { composite='destination-out'; color='rgba(0,0,0,1)'; size = state.size*3; opacity=1; }
+  if(state.tool==='highlighter'){ opacity=0.35; size = state.size*4; }
+  if(state.tool==='pencil')     { opacity = 0.75 + pressure*0.25; }
+
+  currentPath = { color, size, opacity, composite, points:[pt] };
+}
+
+function onMove(e) {
+  if(e.pointerType==='touch' && e.touches && e.touches.length>1) return;
+  const pt = ptOnCanvas(e);
+  const pressure = e.pressure||0.5;
+
+  if(lassoActive) {
+    lassoPoints.push(pt);
+    drawLasso(); return;
+  }
+  if(!drawing || !currentPath) return;
+
+  let size = currentPath.size;
+  if(state.tool==='pen') size = state.size * (0.4 + pressure*0.7);
+  if(state.tool==='pencil') size = state.size * (0.3 + pressure*0.8);
+  currentPath.points.push({...pt, size});
+
+  // Live draw last segment
+  ctx.save();
+  ctx.globalCompositeOperation = currentPath.composite;
+  ctx.globalAlpha = currentPath.opacity;
+  ctx.strokeStyle = currentPath.color;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.lineWidth = size;
+  const pts = currentPath.points;
+  if(pts.length>=2) {
+    const p0=pts[pts.length-2], p1=pts[pts.length-1];
+    ctx.beginPath();
+    ctx.moveTo(p0.x,p0.y);
+    ctx.lineTo(p1.x,p1.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function onUp(e) {
+  if(lassoActive){ finishLasso(); return; }
+  if(!drawing || !currentPath) return;
+  drawing = false;
+  const pg = openPage();
+  if(pg && currentPath.points.length > 1){
+    pg.strokes.push(currentPath);
+    saveAll();
+    updateThumb(state.openPageIdx);
+  }
+  currentPath = null;
+}
+
+// ── Lasso ────────────────────────────────────────────────────
+function drawLasso() {
+  lctx.clearRect(0,0,PAGE_W,PAGE_H);
+  if(lassoPoints.length<2) return;
+  lctx.save();
+  lctx.setLineDash([6,4]);
+  lctx.strokeStyle='#2F7E76'; lctx.lineWidth=1.5;
+  lctx.beginPath(); lctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+  for(let i=1;i<lassoPoints.length;i++) lctx.lineTo(lassoPoints[i].x, lassoPoints[i].y);
+  lctx.closePath(); lctx.stroke();
+  lctx.restore();
+}
+function finishLasso() {
+  lassoActive = false;
+  lctx.clearRect(0,0,PAGE_W,PAGE_H);
+  // Show selection box
+  if(lassoPoints.length<3){ lassoPoints=[]; return; }
+  const xs=lassoPoints.map(p=>p.x), ys=lassoPoints.map(p=>p.y);
+  const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+  selectionBox.style.display='block';
+  selectionBox.style.left  =minX+'px'; selectionBox.style.top  =minY+'px';
+  selectionBox.style.width =(maxX-minX)+'px'; selectionBox.style.height=(maxY-minY)+'px';
+  lassoPoints=[];
+  // Tap elsewhere to deselect
+  const clear=()=>{ selectionBox.style.display='none'; document.removeEventListener('pointerdown',clear); };
+  setTimeout(()=>document.addEventListener('pointerdown',clear),100);
+}
+
+// ── Text tool ────────────────────────────────────────────────
+drawCanvas.addEventListener('click', e => {
+  if(state.tool !== 'text') return;
+  const pt = ptOnCanvas(e);
+  const pg  = openPage(); if(!pg) return;
+  const o = { id:makeId(), type:'text', x:pt.x, y:pt.y, w:200, html:'', fontSize:18, color:state.color };
+  snapHistory();
+  pg.objects.push(o);
+  createTextEl(o, true);
+  saveAll();
+});
+
+// ── Image insert ─────────────────────────────────────────────
+imageFileInput.addEventListener('change', e => {
+  const file = e.target.files[0]; if(!file) return;
+  const pg = openPage(); if(!pg) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const src = ev.target.result;
+    const img = new Image();
+    img.onload = () => {
+      const maxW=300, maxH=300;
+      let w=img.width, h=img.height;
+      if(w>maxW){ h=h*maxW/w; w=maxW; }
+      if(h>maxH){ w=w*maxH/h; h=maxH; }
+      const o = { id:makeId(), type:'image', x:60, y:60, w, h, src };
+      snapHistory();
+      pg.objects.push(o);
+      createImageEl(o, true);
+      saveAll();
+    };
+    img.src = src;
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+});
+
+// ── Toolbar rendering ────────────────────────────────────────
+function buildToolbar() {
+  toolbar.innerHTML='';
+  const tools = [
+    {id:'pen',         icon:ICONS.pen,         label:'Pen'},
+    {id:'pencil',      icon:ICONS.pencil,      label:'Pencil'},
+    {id:'highlighter', icon:ICONS.highlighter, label:'Highlight'},
+    {id:'eraser',      icon:ICONS.eraser,      label:'Eraser'},
+    {id:'lasso',       icon:ICONS.lasso,       label:'Lasso'},
+    {id:'text',        icon:ICONS.text,        label:'Text'},
+    {id:'image',       icon:ICONS.image,       label:'Image'},
+  ];
+  for(const t of tools){
+    const btn = document.createElement('button');
+    btn.className = 'icon-btn' + (state.tool===t.id?' active':'');
+    btn.innerHTML = t.icon; btn.title = t.label;
+    btn.addEventListener('click', () => {
+      if(t.id==='image'){ imageFileInput.click(); return; }
+      state.tool = t.id;
+      buildToolbar();
+    });
+    toolbar.appendChild(btn);
+  }
+
+  // Divider
+  const dv = document.createElement('div'); dv.className='v-divider'; toolbar.appendChild(dv);
+
+  // Color swatches (not for eraser/lasso)
+  if(!['eraser','lasso'].includes(state.tool)) {
+    const colLabel = document.createElement('span'); colLabel.className='toolbar-label'; colLabel.textContent='Color';
+    toolbar.appendChild(colLabel);
+    for(const c of PEN_COLORS) {
+      const sw = document.createElement('div');
+      sw.className = 'swatch' + (state.color===c?' active':'');
+      sw.style.background = c;
+      if(c==='#FFFFFF') sw.style.border='2px solid #ccc';
+      sw.addEventListener('click', () => { state.color=c; buildToolbar(); });
+      toolbar.appendChild(sw);
+    }
+    // Custom color picker
+    const custom = document.createElement('div'); custom.className='swatch-custom'; custom.title='Custom color';
+    const cpInput = document.createElement('input'); cpInput.type='color'; cpInput.value=state.color;
+    cpInput.addEventListener('input', () => { state.color=cpInput.value; buildToolbar(); });
+    custom.appendChild(cpInput); toolbar.appendChild(custom);
+
+    const dv2 = document.createElement('div'); dv2.className='v-divider'; toolbar.appendChild(dv2);
+  }
+
+  // Size
+  const szLabel = document.createElement('span'); szLabel.className='toolbar-label'; szLabel.textContent='Size';
+  toolbar.appendChild(szLabel);
+  const sl = document.createElement('input'); sl.type='range'; sl.id='sizeSlider';
+  sl.min=1; sl.max=state.tool==='highlighter'?8:20; sl.value=state.size;
+  sl.addEventListener('input', () => { state.size=+sl.value; updateSizeDot(); });
+  toolbar.appendChild(sl);
+  const dotWrap = document.createElement('div'); dotWrap.className='size-preview';
+  const dot = document.createElement('div'); dot.className='size-preview-dot'; dot.id='sizeDot';
+  dotWrap.appendChild(dot); toolbar.appendChild(dotWrap);
+  updateSizeDot();
+}
+
+function updateSizeDot() {
+  const dot = $('sizeDot'); if(!dot) return;
+  const s = Math.min(26, state.size * 2);
+  dot.style.width=s+'px'; dot.style.height=s+'px';
+}
+
+// ── Page strip ───────────────────────────────────────────────
+function buildPageStrip() {
+  pageStrip.innerHTML='';
+  const nb = openNotebook(); if(!nb) return;
+  nb.pages.forEach((pg,i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'page-thumb' + (i===state.openPageIdx?' active':'');
+    const tc = document.createElement('canvas');
+    tc.width=PAGE_W; tc.height=PAGE_H;
+    drawTemplate(tc, pg.template, pg.paperColor);
+    for(const s of pg.strokes){ const cx2=tc.getContext('2d'); renderStrokeOnCtx(cx2,s); }
+    thumb.appendChild(tc);
+    const num = document.createElement('div'); num.className='page-num'; num.textContent=i+1;
+    thumb.appendChild(num);
+    thumb.addEventListener('click', () => switchPage(i));
+    pageStrip.appendChild(thumb);
+  });
+  // Add page button
+  const addBtn = document.createElement('div'); addBtn.className='page-add-btn';
+  addBtn.innerHTML=ICONS.plus;
+  addBtn.addEventListener('click', addPage);
+  pageStrip.appendChild(addBtn);
+  // Scroll active into view
+  const thumbs = pageStrip.querySelectorAll('.page-thumb');
+  if(thumbs[state.openPageIdx]) thumbs[state.openPageIdx].scrollIntoView({block:'nearest',inline:'center'});
+}
+
+function renderStrokeOnCtx(cx2, s) {
+  if(!s||s.points.length<2) return;
+  cx2.save();
+  cx2.globalCompositeOperation=s.composite||'source-over';
+  cx2.globalAlpha=s.opacity||1;
+  cx2.strokeStyle=s.color; cx2.lineWidth=s.size/3;
+  cx2.lineCap='round'; cx2.lineJoin='round';
+  cx2.beginPath(); cx2.moveTo(s.points[0].x, s.points[0].y);
+  for(let i=1;i<s.points.length;i++){
+    const p0=s.points[i-1],p1=s.points[i];
+    cx2.quadraticCurveTo(p0.x,p0.y,(p0.x+p1.x)/2,(p0.y+p1.y)/2);
+  }
+  cx2.stroke(); cx2.restore();
+}
+
+function updateThumb(idx) {
+  const nb = openNotebook(); if(!nb) return;
+  const pg = nb.pages[idx]; if(!pg) return;
+  const thumbCanvases = pageStrip.querySelectorAll('.page-thumb canvas');
+  const tc = thumbCanvases[idx]; if(!tc) return;
+  const cx2 = tc.getContext('2d');
+  drawTemplate(tc, pg.template, pg.paperColor);
+  for(const s of pg.strokes) renderStrokeOnCtx(cx2,s);
+}
+
+function switchPage(idx) {
+  state.openPageIdx = idx;
+  state.history = []; state.historyFuture = [];
+  updateUndoRedo();
+  overlayLayer.innerHTML='';
+  setupCanvas();
+  rebuildObjects();
+  buildPageStrip();
+}
+
+function addPage() {
+  const nb = openNotebook(); if(!nb) return;
+  // Match template from current page
+  const cur = openPage();
+  nb.pages.push(makePage(cur?.template||'blank', cur?.paperColor||'#FFFFFF'));
+  saveAll();
+  switchPage(nb.pages.length-1);
+}
+
+// ── Home screen ──────────────────────────────────────────────
+function renderHome() {
+  notebookGrid.innerHTML='';
+  for(const nb of state.notebooks){
+    const card = document.createElement('div'); card.className='notebook-card';
+    card.innerHTML=`
+      <div class="notebook-cover" style="background:${nb.color}">
+        <span class="notebook-cover-title">${escHtml(nb.name)}</span>
+        <button class="notebook-delete">${ICONS.trash}</button>
+      </div>
+      <div class="notebook-name">${escHtml(nb.name)}</div>
+      <div class="notebook-meta"><span>${nb.pages.length} page${nb.pages.length!==1?'s':''}</span></div>
+    `;
+    card.querySelector('.notebook-cover').addEventListener('click', () => openNb(nb.id));
+    card.querySelector('.notebook-name').addEventListener('click', () => openNb(nb.id));
+    card.querySelector('.notebook-delete').addEventListener('click', e => {
+      e.stopPropagation();
+      if(confirm(`Delete "${nb.name}"?`)){
+        state.notebooks = state.notebooks.filter(x=>x.id!==nb.id);
+        saveAll(); renderHome();
+      }
+    });
+    // Long-press to show delete
+    let lpt; 
+    card.addEventListener('pointerdown', () => { lpt=setTimeout(()=>card.classList.add('show-delete'),600); });
+    card.addEventListener('pointerup', () => clearTimeout(lpt));
+    notebookGrid.appendChild(card);
+  }
+  // New notebook card
+  const newCard = document.createElement('div'); newCard.className='new-notebook-card';
+  newCard.innerHTML = `${ICONS.plus}<span>New Notebook</span>`;
+  newCard.addEventListener('click', () => openNewNotebookModal());
+  notebookGrid.appendChild(newCard);
+}
+
+function openNb(id) {
+  state.openNotebookId = id;
+  state.openPageIdx    = 0;
+  state.history=[]; state.historyFuture=[];
+  const nb = openNotebook();
+  notebookTitleInput.value = nb.name;
+  showScreen('notebookScreen');
+  buildToolbar();
+  setupCanvas();
+  rebuildObjects();
+  buildPageStrip();
+  updateUndoRedo();
+}
+
+function showScreen(id) {
+  homeScreen.classList.toggle('hidden', id!=='homeScreen');
+  notebookScreen.classList.toggle('hidden', id!=='notebookScreen');
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── New Notebook Modal ───────────────────────────────────────
+function openNewNotebookModal() {
+  $('nbNameInput').value='';
+  const grid=$('nbColorGrid'); grid.innerHTML='';
+  let chosen = NOTEBOOK_COLORS[0];
+  for(const c of NOTEBOOK_COLORS){
+    const dot=document.createElement('div'); dot.className='color-dot'+(c===chosen?' active':'');
+    dot.style.background=c;
+    dot.addEventListener('click', ()=>{ chosen=c; grid.querySelectorAll('.color-dot').forEach(x=>x.classList.remove('active')); dot.classList.add('active'); });
+    grid.appendChild(dot);
+  }
+  $('newNotebookModal').classList.remove('hidden');
+  setTimeout(()=>$('nbNameInput').focus(),60);
+  $('nbCreateBtn').onclick=()=>{
+    const name = $('nbNameInput').value.trim() || 'Untitled Notebook';
+    const nb = makeNotebook(name, chosen);
+    state.notebooks.push(nb);
+    saveAll(); renderHome();
+    $('newNotebookModal').classList.add('hidden');
+    openNb(nb.id);
+  };
+  $('nbCancelBtn').onclick=()=>$('newNotebookModal').classList.add('hidden');
+}
+$('newNotebookBtn').addEventListener('click', openNewNotebookModal);
+
+// ── Page settings modal ──────────────────────────────────────
+$('pageSettingsBtn').addEventListener('click', () => {
+  const pg = openPage(); if(!pg) return;
+  const tmplDiv = $('templateOptions'); tmplDiv.innerHTML='';
+  for(const t of TEMPLATES){
+    const chip=document.createElement('div'); chip.className='option-chip'+(pg.template===t?' active':'');
+    chip.textContent=t.charAt(0).toUpperCase()+t.slice(1);
+    chip.addEventListener('click',()=>{
+      pg.template=t; saveAll(); redrawPage(); updateThumb(state.openPageIdx);
+      tmplDiv.querySelectorAll('.option-chip').forEach(x=>x.classList.remove('active')); chip.classList.add('active');
+    });
+    tmplDiv.appendChild(chip);
+  }
+  const pcDiv=$('paperColorOptions'); pcDiv.innerHTML='';
+  for(const c of PAPER_COLORS){
+    const dot=document.createElement('div'); dot.className='color-dot'+(pg.paperColor===c?' active':'');
+    dot.style.background=c; if(c==='#FFFFFF') dot.style.border='2px solid #ccc';
+    dot.addEventListener('click',()=>{
+      pg.paperColor=c; saveAll(); redrawPage(); updateThumb(state.openPageIdx);
+      pcDiv.querySelectorAll('.color-dot').forEach(x=>x.classList.remove('active')); dot.classList.add('active');
+    });
+    pcDiv.appendChild(dot);
+  }
+  $('pageSettingsModal').classList.remove('hidden');
+});
+$('pageSettingsCloseBtn').addEventListener('click', ()=>$('pageSettingsModal').classList.add('hidden'));
+$('deletePageBtn').addEventListener('click', ()=>{
+  const nb=openNotebook(); if(!nb||nb.pages.length<=1){ showToast('Cannot delete the only page'); return; }
+  if(!confirm('Delete this page?')) return;
+  nb.pages.splice(state.openPageIdx,1);
+  const newIdx=Math.min(state.openPageIdx, nb.pages.length-1);
+  saveAll();
+  $('pageSettingsModal').classList.add('hidden');
+  switchPage(newIdx);
+});
+
+// ── Export modal ─────────────────────────────────────────────
+$('exportBtn').addEventListener('click', ()=>$('exportModal').classList.remove('hidden'));
+$('exportCloseBtn').addEventListener('click', ()=>$('exportModal').classList.add('hidden'));
+
+$('exportPagePngBtn').addEventListener('click', ()=>{
+  const pg=openPage(); if(!pg) return;
+  // Compose: template + strokes onto fresh canvas
+  const exp=document.createElement('canvas'); exp.width=PAGE_W; exp.height=PAGE_H;
+  drawTemplate(exp, pg.template, pg.paperColor);
+  const ec=exp.getContext('2d');
+  for(const s of pg.strokes) renderStrokeOnCtx(ec,s);
+  const link=document.createElement('a');
+  link.download='quill-page.png'; link.href=exp.toDataURL('image/png');
+  link.click();
+  $('exportModal').classList.add('hidden'); showToast('Page saved as image');
+});
+
+$('exportNotebookJsonBtn').addEventListener('click', ()=>{
+  const nb=openNotebook(); if(!nb) return;
+  const json=JSON.stringify(nb,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const link=document.createElement('a');
+  link.download=`${nb.name}.json`; link.href=URL.createObjectURL(blob);
+  link.click();
+  $('exportModal').classList.add('hidden'); showToast('Notebook exported');
+});
+
+// ── Import ───────────────────────────────────────────────────
+$('homeImportBtn').innerHTML = ICONS.import;
+$('homeImportBtn').title='Import notebook backup';
+$('homeImportBtn').addEventListener('click', ()=>importFileInput.click());
+importFileInput.addEventListener('change', e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const nb=JSON.parse(ev.target.result);
+      if(!nb.id||!nb.pages) throw new Error();
+      nb.id=makeId(); // new id to avoid collision
+      state.notebooks.push(nb); saveAll(); renderHome();
+      showToast('Notebook imported!');
+    }catch{ showToast('Invalid backup file'); }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+});
+
+// ── Zoom buttons ─────────────────────────────────────────────
+$('zoomInBtn').addEventListener('click', ()=>stepZoom(1));
+$('zoomOutBtn').addEventListener('click', ()=>stepZoom(-1));
+$('zoomResetBtn').addEventListener('click', ()=>applyZoom(1.0));
+$('zoomInBtn').innerHTML  = ICONS.zoomIn;
+$('zoomOutBtn').innerHTML = ICONS.zoomOut;
+$('zoomResetBtn').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>`;
+
+// ── Undo/Redo buttons ────────────────────────────────────────
+$('undoBtn').innerHTML = ICONS.undo;
+$('redoBtn').innerHTML = ICONS.redo;
+$('undoBtn').addEventListener('click', undo);
+$('redoBtn').addEventListener('click', redo);
+
+// ── Back button ──────────────────────────────────────────────
+$('backBtn').innerHTML = ICONS.back;
+$('backBtn').addEventListener('click', ()=>{
+  saveAll();
+  showScreen('homeScreen');
+  renderHome();
+});
+
+// ── Notebook title editable ──────────────────────────────────
+notebookTitleInput.addEventListener('blur', ()=>{
+  const nb=openNotebook(); if(!nb) return;
+  nb.name = notebookTitleInput.value.trim() || 'Untitled';
+  saveAll(); 
+});
+
+// ── Top-bar icons ────────────────────────────────────────────
+$('pageSettingsBtn').innerHTML = ICONS.settings;
+$('exportBtn').innerHTML       = ICONS.export;
+$('darkToggleBtn').innerHTML   = ICONS.moon;
+$('darkToggleBtn').addEventListener('click', toggleDark);
+$('homeDarkToggle').innerHTML  = ICONS.moon;
+$('homeDarkToggle').addEventListener('click', toggleDark);
+
+// ── Keyboard shortcuts ───────────────────────────────────────
+document.addEventListener('keydown', e=>{
+  if(e.target.isContentEditable || e.target.tagName==='INPUT') return;
+  if((e.metaKey||e.ctrlKey)&&e.key==='z'&&!e.shiftKey){ e.preventDefault(); undo(); }
+  if((e.metaKey||e.ctrlKey)&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){ e.preventDefault(); redo(); }
+  if(e.key==='Escape') deselectAll();
+  // Tool shortcuts
+  const map={p:'pen',c:'pencil',h:'highlighter',e:'eraser',l:'lasso',t:'text'};
+  if(map[e.key]&&!e.metaKey&&!e.ctrlKey){ state.tool=map[e.key]; buildToolbar(); }
+});
+
+// ── Boot ─────────────────────────────────────────────────────
+function boot() {
+  loadAll();
+  const dark = localStorage.getItem('quill_dark')==='1';
+  applyDark(dark);
+  const savedZoom = parseFloat(localStorage.getItem('quill_zoom')||'1');
+  state.zoom = isNaN(savedZoom)?1:savedZoom;
+  renderHome();
+  showScreen('homeScreen');
+}
+boot();
+
+</script>
+</body>
+</html>
